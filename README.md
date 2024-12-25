@@ -12,12 +12,13 @@ In second place, you need to put the raw files in the `src` folder or the
 compiled files in some place in your propath. It must follow the same folder
 structure in the `src` folder.
 
-For instance, let's say that *C:\Lib\OpenEdge\* is in your propath. Then
+For instance, let's say that *C:\Lib\OpenEdge* is in your propath. Then
 the `src` folder must be extracted in the following way: 
 *C:\Lib\OpenEdge\classes\<class_directory>\<class_file>.cls*. If you want
 to modify the structure of the folder, don't forget to edit all the `.cls`
 files to match the new structure.
 
+> :warning: this part is not done yet.
 To use the ZIP DEFLATE algorithm you can write the following in your editor:
 
 ```
