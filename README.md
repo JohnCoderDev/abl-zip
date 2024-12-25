@@ -18,7 +18,8 @@ the `src` folder must be extracted in the following way:
 to modify the structure of the folder, don't forget to edit all the `.cls`
 files to match the new structure.
 
-> :warning: this part is not done yet.
+> :warning: this part is not done yet, so the following algorithm does not work.
+
 To use the ZIP DEFLATE algorithm you can write the following in your editor:
 
 ```
