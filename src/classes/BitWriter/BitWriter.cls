@@ -92,14 +92,14 @@ CLASS Classes.BitWriter.BitWriter:
     END METHOD.
     
     METHOD PUBLIC VOID addByte(b AS CHARACTER):
-        IF LENGTH(b) <> 1 THEN DO:
+        IF LENGTH(b) > 1 THEN DO:
             UNDO, THROW NEW PROGRESS.Lang.AppError(
-                'a byte parsed as char must have length exactly equals to 1',
+                'a byte parsed as char must not have length greater than 1',
                 -2
             ).
         END.
-        DEFINE VARIABLE byteChar AS INTEGER.
-        ASSIGN byteChar = ASC(b).
+        DEFINE VARIABLE byteChar AS INTEGER. 
+        ASSIGN byteChar = IF LENGTH(b) = 0 THEN 0 ELSE ASC(b).
         CREATE bytesTable.
         ASSIGN
             bytesTable.byteCode = byteChar
@@ -142,6 +142,20 @@ CLASS Classes.BitWriter.BitWriter:
         DO idx = 1 TO n:
             addByte(bytes[idx]).
         END.
+    END METHOD.
+    
+    METHOD PUBLIC VOID addVariadicBytes(b AS INT64):
+        DEFINE VARIABLE byteCounter AS INTEGER INITIAL 0 NO-UNDO.
+        DEFINE VARIABLE bCopy AS INT64 NO-UNDO.
+        
+        ASSIGN bCopy = b.
+        IF b = 0 THEN ASSIGN byteCounter = 1.
+        DO WHILE bCopy > 0:
+            ASSIGN
+                byteCounter = byteCounter + 1
+                bCopy = TRUNCATE(bCopy / 256, 0).
+        END.
+        addNBytes(b, byteCounter).
     END METHOD.
     
     METHOD PUBLIC VOID removeByte(sequence AS INT64):
