@@ -45,7 +45,10 @@ CLASS Classes.BitWriter.BitWriter:
             OUTPUT TO VALUE(filepath) BINARY.
         
         FOR EACH bytesTable:
-            PUT UNFORMATTED CHR(bytesTable.byteCode).
+            IF bytesTable.byteCode = 0 THEN
+                PUT CONTROL NULL.
+            ELSE 
+                PUT UNFORMATTED CHR(bytesTable.byteCode).
         END.
         
         OUTPUT CLOSE.
