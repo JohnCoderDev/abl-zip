@@ -21,7 +21,7 @@ CLASS Classes.Encoders.LZ77Encoder:
             writer = NEW BitWriter().
     END CONSTRUCTOR.
     
-    METHOD PUBLIC VOID encodeAlphabet(a AS LONGCHAR):
+    METHOD PUBLIC VOID encodeAlphabetFromPhrase(a AS LONGCHAR):
         clearEncoder().
         parseAlphabet(a).
         alphabetToPointers().
@@ -78,7 +78,14 @@ CLASS Classes.Encoders.LZ77Encoder:
     END METHOD.
     
     METHOD PUBLIC VOID writeFile(filepath AS CHARACTER):
-        writer:writeFile(filepath).
+        writer:writeFile(filepath, FALSE).
+    END METHOD.
+    
+    METHOD PUBLIC VOID writeFile(
+        filepath AS CHARACTER,
+        shouldAppend AS LOGICAL
+    ):
+        writer:writeFile(filepath, shouldAppend).
     END METHOD.
     
     // return [offset, length]
@@ -117,7 +124,7 @@ CLASS Classes.Encoders.LZ77Encoder:
         RETURN res.
     END METHOD.
     
-    METHOD PUBLIC VOID setsearchBufferSize(newSearchBufferSize AS INT64):
+    METHOD PUBLIC VOID setSearchBufferSize(newSearchBufferSize AS INT64):
         IF newSearchBufferSize < 2 THEN DO:
             UNDO, THROW NEW PROGRESS.Lang.AppError(
                 'the window size could not be lower than 2',

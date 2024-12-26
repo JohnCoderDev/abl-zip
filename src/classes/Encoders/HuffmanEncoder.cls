@@ -4,8 +4,8 @@ USING Classes.BitWriter.BitWriter.
 
 CLASS Classes.Encoders.HuffmanEncoder:
     DEFINE PRIVATE PROPERTY writer AS BitWriter GET. SET.
-    DEFINE PUBLIC PROPERTY currentAlphabet AS LONGCHAR GET. PRIVATE SET.
-    DEFINE PUBLIC PROPERTY translatedAlphabet AS LONGCHAR GET. PRIVATE SET.
+    DEFINE PUBLIC PROPERTY currentPhrase AS LONGCHAR GET. PRIVATE SET.
+    DEFINE PUBLIC PROPERTY translatedPhrase AS LONGCHAR GET. PRIVATE SET.
     
     DEFINE PRIVATE TEMP-TABLE alphabet
         FIELD alphaChar AS CHARACTER
@@ -26,18 +26,23 @@ CLASS Classes.Encoders.HuffmanEncoder:
         clearEncoder().
     END CONSTRUCTOR.
     
-    METHOD PUBLIC VOID encodeAlphabet(a AS LONGCHAR):
+    METHOD PUBLIC VOID encodeAlphabetFromPhrase(a AS LONGCHAR):
         clearEncoder().
-        parseAlphabet(a).
-        alphabetToTree().
-        treeToEncodedAlphabet().
-        translateAlphabet().
+        parsePhrase(a).
+        encodeCurrentAlphabet().
+        translatePhrase().
     END METHOD.
     
-    METHOD PUBLIC VOID parseAlphabet(a AS LONGCHAR):
+    METHOD PUBLIC VOID encodeCurrentAlphabet():
+        alphabetToTree().
+        treeToEncodedAlphabet().
+    END METHOD.
+    
+    METHOD PUBLIC VOID parsePhrase(a AS LONGCHAR):
         DEFINE VARIABLE idx AS INT64.
         DEFINE VARIABLE cidx AS CHARACTER.
-        ASSIGN currentAlphabet = a.
+        
+        setCurrentPhrase(a).
         DO idx = 1 TO LENGTH(a):
             ASSIGN cidx = SUBSTRING(a, idx, 1).
             addCharToAlphabet(cidx).
@@ -119,35 +124,46 @@ CLASS Classes.Encoders.HuffmanEncoder:
         END.
     END METHOD.
     
-    METHOD PUBLIC VOID translateAlphabet():
+    METHOD PUBLIC VOID setCurrentPhrase(a AS LONGCHAR):
+        ASSIGN currentPhrase = a.
+    END METHOD.
+    
+    METHOD PUBLIC VOID translatePhrase():
         DEFINE VARIABLE idx AS INT64.
         DEFINE VARIABLE cidx AS CHARACTER.
         
-        ASSIGN translatedAlphabet = "".
+        ASSIGN translatedPhrase = "".
         
-        DO idx = 1 TO LENGTH(currentAlphabet):
+        DO idx = 1 TO LENGTH(currentPhrase):
             ASSIGN
-                cidx = SUBSTRING(currentAlphabet, idx, 1).
+                cidx = SUBSTRING(currentPhrase, idx, 1).
             FIND FIRST encodedAlphabet
                 WHERE encodedAlphabet.alphaChar = cidx.
             ASSIGN
-                translatedAlphabet = translatedAlphabet + encodedAlphabet.binRep.
+                translatedPhrase = translatedPhrase + encodedAlphabet.binRep.
         END.
     END METHOD.
     
     METHOD PUBLIC MEMPTR writeInMemory():
         writer:clearWriter().
-        writer:parseBitString(translatedAlphabet).
+        writer:parseBitString(translatedPhrase).
         RETURN writer:writeInMemory().
     END METHOD.
     
     METHOD PUBLIC VOID writeFile(filepath AS CHARACTER):
-        writer:clearWriter().
-        writer:parseBitString(translatedAlphabet).
-        writer:writeFile(filepath).
+        writeFile(filepath, FALSE).
     END METHOD.
     
-    METHOD PRIVATE VOID addCharToAlphabet(a AS CHARACTER):
+    METHOD PUBLIC VOID writeFile(
+        filepath AS CHARACTER,
+        shouldAppend AS LOGICAL
+    ):
+        writer:clearWriter().
+        writer:parseBitString(translatedPhrase).
+        writer:writeFile(filepath, shouldAppend).
+    END METHOD.
+    
+    METHOD PUBLIC VOID addCharToAlphabet(a AS CHARACTER, w AS INT64):
         IF LENGTH(a) <> 1 THEN DO:
             UNDO, THROW NEW PROGRESS.Lang.AppError(
                 'this method only supports one char at a time',
@@ -166,21 +182,70 @@ CLASS Classes.Encoders.HuffmanEncoder:
                 newNode = NEW BinTree()
                 newNode:nodeValue = a
                 alphabet.alphaChar = a
-                alphabet.weight = 1
+                alphabet.weight = IF w = -1 
+                    THEN 1 
+                    ELSE w
                 alphabet.node = newNode.
          END.
          ELSE DO:
             ASSIGN
-                alphabet.weight = alphabet.weight + 1.
+                alphabet.weight = IF w = -1 
+                    THEN alphabet.weight + 1 
+                    ELSE w.
          END.
+    END METHOD.
+    
+    METHOD PUBLIC VOID addCharToAlphabet(a AS CHARACTER):
+        addCharToAlphabet(a, -1).
+    END METHOD.
+    
+    
+    METHOD PUBLIC VOID addCharToEncodedAlphabet(
+        a AS CHARACTER,
+        binaryRep AS CHARACTER
+    ):
+        IF CAN-FIND(
+            FIRST encodedAlphabet
+            WHERE encodedAlphabet.binRep = binaryRep
+                AND encodedAlphabet.alphaChar <> a
+        ) THEN DO:
+            UNDO, THROW NEW PROGRESS.Lang.AppError(
+                'binary representation already taken by char `' 
+                + encodedAlphabet.alphaChar + '`',
+                -202
+            ).    
+        END.
+        
+        FIND FIRST encodedAlphabet 
+            WHERE encodedAlphabet.alphaChar = a
+            NO-ERROR.
+        
+        IF NOT AVAILABLE encodedAlphabet THEN DO:
+            CREATE encodedAlphabet.
+        END.
+        
+        ASSIGN
+            encodedAlphabet.alphaChar = a
+            encodedAlphabet.binRep = binaryRep.
+    END METHOD.
+    
+    METHOD PUBLIC HANDLE getEncodedAlphabetTableBuffer():
+        RETURN TEMP-TABLE encodedAlphabet:DEFAULT-BUFFER-HANDLE.            
+    END METHOD.
+
+    METHOD PUBLIC VOID showEncodedTable():
+        FOR EACH encodedAlphabet:
+            DISPLAY encodedAlphabet
+                WITH SCROLLABLE.
+        END.
     END METHOD.
     
     METHOD PUBLIC VOID clearEncoder():
         EMPTY TEMP-TABLE alphabet.
         EMPTY TEMP-TABLE encodedAlphabet.
         ASSIGN
-            currentAlphabet = ""
-            translatedAlphabet = "".
+            currentPhrase = ""
+            translatedPhrase = "".
         writer:clearWriter().
     END METHOD.
 END CLASS.
