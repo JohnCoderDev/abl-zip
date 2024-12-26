@@ -32,10 +32,22 @@ CLASS Classes.BitWriter.BitWriter:
     END METHOD.
     
     METHOD PUBLIC VOID writeFile(filepath AS CHARACTER):
-        OUTPUT TO VALUE(filepath) BINARY.
-            FOR EACH bytesTable:
-                PUT UNFORMATTED CHR(bytesTable.byteCode).
-            END.
+        writeFile(filepath, FALSE).
+    END METHOD.
+    
+    METHOD PUBLIC VOID writeFile(
+        filepath AS CHARACTER,
+        shouldAppend AS LOGICAL
+    ):
+        IF shouldAppend THEN
+            OUTPUT TO VALUE(filepath) BINARY APPEND.
+        ELSE 
+            OUTPUT TO VALUE(filepath) BINARY.
+        
+        FOR EACH bytesTable:
+            PUT UNFORMATTED CHR(bytesTable.byteCode).
+        END.
+        
         OUTPUT CLOSE.
     END METHOD.
     
@@ -78,12 +90,7 @@ CLASS Classes.BitWriter.BitWriter:
     END METHOD.
     
     METHOD PUBLIC VOID addByte(b AS INTEGER):
-        IF b > 255 OR b < 0 THEN DO:
-            UNDO, THROW NEW PROGRESS.Lang.AppError(
-                'trying to add byte out of range',
-                -1
-            ).
-        END.
+        assertOneByte(b).
         CREATE bytesTable.
         ASSIGN
             bytesTable.byteCode = b
@@ -144,6 +151,22 @@ CLASS Classes.BitWriter.BitWriter:
         END.
     END METHOD.
     
+    METHOD PUBLIC VOID insertByte(
+        b AS INTEGER,
+        p AS INT64
+    ):
+        assertOneByte(b).
+        FOR EACH bytesTable WHERE bytesTable.byteSequence >= p:
+            ASSIGN 
+                bytesTable.byteSequence = bytesTable.byteSequence + 1.
+        END.
+        CREATE bytesTable.
+        ASSIGN 
+            bytesTable.byteSequence = p
+            bytesTable.byteCode = b
+            nextSequence = nextSequence + 1.
+    END METHOD.
+    
     METHOD PUBLIC VOID addVariadicBytes(b AS INT64):
         DEFINE VARIABLE byteCounter AS INTEGER INITIAL 0 NO-UNDO.
         DEFINE VARIABLE bCopy AS INT64 NO-UNDO.
@@ -171,6 +194,15 @@ CLASS Classes.BitWriter.BitWriter:
                     bytesTable.byteSequence = bytesTable.byteSequence - 1.
             END.
             ASSIGN nextSequence = nextSequence - 1.
+        END.
+    END METHOD.
+    
+    METHOD PRIVATE VOID assertOneByte(b AS INT64):
+        IF b > 255 OR b < 0 THEN DO:
+            UNDO, THROW NEW PROGRESS.Lang.AppError(
+                'trying to add byte out of range',
+                -1
+            ).
         END.
     END METHOD.
     
