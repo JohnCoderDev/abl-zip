@@ -1,9 +1,10 @@
 USING Classes.BaseConverter.*.
+USING Classes.BitWriter.BitShifter.
 
 CLASS Classes.BitWriter.BitWriter:
     DEFINE TEMP-TABLE bytesTable
         FIELD byteSequence AS INT64
-        FIELD byteCode AS INTEGER
+        FIELD byteCode AS INT64
         INDEX idxSequence AS PRIMARY UNIQUE byteSequence ASCENDING.
     
     DEFINE PRIVATE PROPERTY nextSequence AS INT64 INITIAL 1 GET. SET.
@@ -66,7 +67,7 @@ CLASS Classes.BitWriter.BitWriter:
     METHOD PUBLIC VOID parseBitString(bitString AS LONGCHAR):
         DEFINE VARIABLE idx AS INT64.
         DEFINE VARIABLE byteString AS CHARACTER.
-        DEFINE VARIABLE byteValue AS INTEGER.
+        DEFINE VARIABLE byteValue AS INT64.
         
         ASSIGN bitString = REPLACE(bitString, ' ', '').
         
@@ -81,7 +82,7 @@ CLASS Classes.BitWriter.BitWriter:
     METHOD PUBLIC VOID parseHexString(hexString AS LONGCHAR):
         DEFINE VARIABLE idx AS INT64.
         DEFINE VARIABLE hexByteString AS CHARACTER.
-        DEFINE VARIABLE hexByteValue AS INTEGER.
+        DEFINE VARIABLE hexByteValue AS INT64.
         ASSIGN hexString = REPLACE(hexString, ' ', '').
         
         DO idx = 1 TO LENGTH(hexString) BY 2:
@@ -91,16 +92,7 @@ CLASS Classes.BitWriter.BitWriter:
             addByte(hexByteValue).
         END.
     END METHOD.
-    
-    METHOD PUBLIC VOID addByte(b AS INTEGER):
-        assertOneByte(b).
-        CREATE bytesTable.
-        ASSIGN
-            bytesTable.byteCode = b
-            bytesTable.byteSequence = nextSequence
-            nextSequence = nextSequence + 1.
-    END METHOD.
-    
+
     METHOD PUBLIC VOID addByte(b AS CHARACTER):
         IF LENGTH(b) > 1 THEN DO:
             UNDO, THROW NEW PROGRESS.Lang.AppError(
@@ -108,13 +100,13 @@ CLASS Classes.BitWriter.BitWriter:
                 -2
             ).
         END.
-        DEFINE VARIABLE byteChar AS INTEGER. 
-        ASSIGN byteChar = IF LENGTH(b) = 0 THEN 0 ELSE ASC(b).
-        CREATE bytesTable.
-        ASSIGN
-            bytesTable.byteCode = byteChar
-            bytesTable.byteSequence = nextSequence
-            nextSequence = nextSequence + 1.
+        DEFINE VARIABLE byteCode AS INT64. 
+        ASSIGN byteCode = IF LENGTH(b) = 0 THEN 0 ELSE ASC(b).
+        addNBytes(byteCode, 1).
+    END METHOD.
+    
+    METHOD PUBLIC VOID addByte(b AS INT64):
+        addNBytes(b, 1).
     END METHOD.
     
     METHOD PUBLIC VOID add2Bytes(b AS INT64):
@@ -131,7 +123,7 @@ CLASS Classes.BitWriter.BitWriter:
     
     METHOD PUBLIC VOID addNBytes(
         b AS INT64,
-        n AS INTEGER
+        n AS INT64
     ):
         IF n > 8 OR n < 1 THEN DO:
             UNDO, THROW NEW PROGRESS.Lang.AppError(
@@ -140,48 +132,77 @@ CLASS Classes.BitWriter.BitWriter:
             ).
         END.
         
-        DEFINE VARIABLE bytes AS INTEGER EXTENT 8.
-        DEFINE VARIABLE idx AS INTEGER.
-        
-        DO idx = n TO 1 BY -1:
-            ASSIGN 
-                bytes[idx] = b MOD 256
-                b = TRUNCATE(b / 256, 0).
-        END.
-        
+        DEFINE VARIABLE idx AS INT64.
         DO idx = 1 TO n:
-            addByte(bytes[idx]).
+            CREATE bytesTable.
+            ASSIGN 
+                bytesTable.byteSequence = nextSequence
+                bytesTable.byteCode = BitShifter:getBytesFromRight(b, 1)
+                b = BitShifter:shiftRightBytes(b, 1)
+                nextSequence = nextSequence + 1.
         END.
     END METHOD.
     
     METHOD PUBLIC VOID insertByte(
-        b AS INTEGER,
+        b AS INT64,
         p AS INT64
     ):
-        assertOneByte(b).
-        FOR EACH bytesTable WHERE bytesTable.byteSequence >= p:
+        insertNBytes(b, 1, p).
+    END METHOD.
+    
+    METHOD PUBLIC VOID insert2Bytes(
+        b AS INT64,
+        p AS INT64
+    ):
+        insertNBytes(b, 2, p).
+    END.
+    
+    METHOD PUBLIC VOID insert4Bytes(
+        b AS INT64,
+        p AS INT64
+    ):
+        insertNBytes(b, 4, p).
+    END METHOD.
+    
+    METHOD PUBLIC VOID insert8Bytes(
+        b AS INT64,
+        p AS INT64
+    ):
+        insertNBytes(b, 8, p).
+    END METHOD.    
+    
+    METHOD PUBLIC VOID insertNBytes(
+        b AS INT64,
+        c AS INT64,
+        p AS INT64
+    ):
+        IF c > 8 OR c < 1 THEN
+            UNDO, THROW NEW PROGRESS.Lang.AppError(
+                'count of bytes must be in range 1 up to 8',
+                -6
+            ).
+        
+        FOR EACH bytesTable 
+        WHERE bytesTable.byteSequence >= p
+        BY bytesTable.byteSequence DESCENDING:
             ASSIGN 
-                bytesTable.byteSequence = bytesTable.byteSequence + 1.
+                bytesTable.byteSequence = bytesTable.byteSequence + c.
         END.
-        CREATE bytesTable.
-        ASSIGN 
-            bytesTable.byteSequence = p
-            bytesTable.byteCode = b
-            nextSequence = nextSequence + 1.
+        
+        ASSIGN nextSequence = nextSequence + c.
+        
+        DEFINE VARIABLE idx AS INT64.
+        DO idx = p TO p + c:
+            CREATE bytesTable.
+            ASSIGN
+                bytesTable.byteSequence = idx
+                bytesTable.byteCode = BitShifter:getBytesFromRight(b, 1)
+                b = BitShifter:shiftRightBytes(b, 1).
+        END.
     END METHOD.
     
     METHOD PUBLIC VOID addVariadicBytes(b AS INT64):
-        DEFINE VARIABLE byteCounter AS INTEGER INITIAL 0 NO-UNDO.
-        DEFINE VARIABLE bCopy AS INT64 NO-UNDO.
-        
-        ASSIGN bCopy = b.
-        IF b = 0 THEN ASSIGN byteCounter = 1.
-        DO WHILE bCopy > 0:
-            ASSIGN
-                byteCounter = byteCounter + 1
-                bCopy = TRUNCATE(bCopy / 256, 0).
-        END.
-        addNBytes(b, byteCounter).
+        addNBytes(b, INT(BitShifter:countBytes(b))).
     END METHOD.
     
     METHOD PUBLIC VOID removeByte(sequence AS INT64):
@@ -197,15 +218,6 @@ CLASS Classes.BitWriter.BitWriter:
                     bytesTable.byteSequence = bytesTable.byteSequence - 1.
             END.
             ASSIGN nextSequence = nextSequence - 1.
-        END.
-    END METHOD.
-    
-    METHOD PRIVATE VOID assertOneByte(b AS INT64):
-        IF b > 255 OR b < 0 THEN DO:
-            UNDO, THROW NEW PROGRESS.Lang.AppError(
-                'trying to add byte out of range',
-                -1
-            ).
         END.
     END METHOD.
     
