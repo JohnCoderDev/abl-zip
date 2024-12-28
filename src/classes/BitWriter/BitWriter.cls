@@ -116,7 +116,7 @@ CLASS Classes.BitWriter.BitWriter:
     METHOD PUBLIC VOID add4Bytes(b AS INT64):
         addNBytes(b, 4).
     END METHOD.
-    
+                                                                                         
     METHOD PUBLIC VOID add8Bytes(b AS INT64):
         addNBytes(b, 8).
     END METHOD.
@@ -203,6 +203,13 @@ CLASS Classes.BitWriter.BitWriter:
     
     METHOD PUBLIC VOID addVariadicBytes(b AS INT64):
         addNBytes(b, INT(BitShifter:countBytes(b))).
+    END METHOD.
+    
+    METHOD PUBLIC VOID addArrayOfBytes(bytes AS INT64 EXTENT):
+        DEFINE VARIABLE idx AS INT64.
+        DO idx = 1 TO EXTENT(bytes):
+            addByte(bytes[idx]).
+        END.
     END METHOD.
     
     METHOD PUBLIC VOID removeByte(sequence AS INT64):
